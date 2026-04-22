@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ShopKeeper Pro - Premium</title>
+
+<style>
+body {
+  margin:0;
+  font-family: 'Segoe UI', sans-serif;
+  background: linear-gradient(135deg,#0f0c29,#302b63,#24243e);
+  color:white;
+}
+
+.container {
+  max-width:600px;
+  margin:auto;
+  padding:16px;
+}
+
+.card {
+  background: rgba(255,255,255,0.06);
+  border:1px solid rgba(255,255,255,0.1);
+  border-radius:14px;
+  padding:16px;
+  margin-bottom:14px;
+  animation: fadeIn 0.4s ease;
+}
+
+button {
+  width:100%;
+  padding:12px;
+  margin:6px 0;
+  border:none;
+  border-radius:10px;
+  font-weight:600;
+  cursor:pointer;
+  transition:0.2s;
+}
+
+button:hover { transform: translateY(-2px); }
+
+.option { background:#1e293b; color:white; }
+.option:hover { background:#334155; }
+
+.correct { background:#22c55e !important; }
+.wrong { background:#ef4444 !important; }
+
+.primary {
+  background: linear-gradient(135deg,#7c3aed,#4f46e5);
+  color:white;
+}
+
+.hidden { display:none; }
+
+.progress {
+  height:6px;
+  background:#333;
+  border-radius:50px;
+  overflow:hidden;
+  margin-bottom:10px;
+}
+
+.progress-bar {
+  height:100%;
+  background:linear-gradient(90deg,#22c55e,#a78bfa);
+  width:0%;
+  transition:0.4s;
+}
+
+/* Animations */
+@keyframes bounce { 50% { transform:scale(1.05);} }
+@keyframes shake {
+  25% { transform:translateX(-6px);}
+  75% { transform:translateX(6px);}
+}
+@keyframes fadeIn {
+  from {opacity:0; transform:translateY(10px);}
+  to {opacity:1;}
+}
+
+.bounce { animation:bounce 0.4s; }
+.shake { animation:shake 0.4s; }
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<!-- INTRO -->
+<div id="intro">
+  <h1>🏪 ShopKeeper Pro</h1>
+  <p>Earn money by solving profit & loss problems.</p>
+  <button class="primary" onclick="startGame()">Start Game 🚀</button>
+</div>
+
+<!-- GAME -->
+<div id="game" class="hidden">
+
+  <div class="progress"><div id="progressBar" class="progress-bar"></div></div>
+
+  <div class="card" id="stats"></div>
+
+  <div class="card">
+    <h2 id="title"></h2>
+    <p id="story"></p>
+    <h3 id="question"></h3>
+  </div>
+
+  <div id="options"></div>
+
+  <button onclick="toggleHint()" class="primary">💡 Hint</button>
+  <div id="hintBox" class="card hidden"></div>
+
+  <button class="primary" onclick="confirmAnswer()">Confirm</button>
+
+  <div id="resultBox" class="card hidden"></div>
+
+  <button id="nextBtn" class="primary hidden" onclick="nextQuestion()">Next →</button>
+
+</div>
+
+<!-- RESULT -->
+<div id="result" class="hidden">
+  <h1 id="finalMsg"></h1>
+  <h2 id="finalScore"></h2>
+
+  <div class="card">
+    <h3>🏆 Leaderboard</h3>
+    <ul id="leaderboard"></ul>
+  </div>
+
+  <button class="primary" onclick="restart()">Play Again</button>
+</div>
+
+</div>
+
+<script>
+
+// SOUND
+function playSound(type){
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const o = ctx.createOscillator();
+  o.type = "sine";
+  o.frequency.value = type==="correct" ? 600 : 200;
+  o.connect(ctx.destination);
+  o.start();
+  setTimeout(()=>o.stop(),150);
+}
+
+// DATA
+const SCENARIOS = [
+  {title:"🍎 Apple",story:"500 → 650",question:"Profit %?",options:["20%","25%","30%","15%"],answer:"30%",hint:"(150/500)×100"},
+  {title:"👟 Shoes",story:"1200 → 1020",question:"Loss %?",options:["10%","12%","15%","18%"],answer:"15%",hint:"(180/1200)×100"},
+  {title:"📱 Mobile",story:"CP 8000, 20% profit",question:"SP?",options:["₹9200","₹9600","₹9000","₹8800"],answer:"₹9600",hint:"8000×1.2"},
+  {title:"💻 Laptop",story:"50k, 20% then 10%",question:"Final?",options:["₹36000","₹35000","₹38000","₹37000"],answer:"₹36000",hint:"0.8×0.9"},
+  {title:"🏏 Bat",story:"SP 990, 10% profit",question:"CP?",options:["₹900","₹891","₹920","₹850"],answer:"₹900",hint:"SP×100/110"}
+];
+
+let index=0, score=0, money=10000, streak=0;
+let selected=null, confirmed=false;
+
+// START
+function startGame(){
+  document.getElementById("intro").classList.add("hidden");
+  document.getElementById("game").classList.remove("hidden");
+  loadQuestion();
+}
+
+// LOAD
+function loadQuestion(){
+  const s = SCENARIOS[index];
+  selected=null; confirmed=false;
+
+  document.getElementById("title").innerText=s.title;
+  document.getElementById("story").innerText=s.story;
+  document.getElementById("question").innerText=s.question;
+
+  document.getElementById("stats").innerText=
+    `💰 ₹${money} | Score ${score} | 🔥 Streak ${streak}`;
+
+  document.getElementById("progressBar").style.width =
+    (index/SCENARIOS.length*100)+"%";
+
+  let optDiv=document.getElementById("options");
+  optDiv.innerHTML="";
+
+  s.options.forEach(opt=>{
+    let b=document.createElement("button");
+    b.innerText=opt;
+    b.className="option";
+    b.onclick=()=>selectOption(b,opt);
+    optDiv.appendChild(b);
+  });
+
+  document.getElementById("hintBox").classList.add("hidden");
+  document.getElementById("resultBox").classList.add("hidden");
+  document.getElementById("nextBtn").classList.add("hidden");
+}
+
+// SELECT
+function selectOption(btn,opt){
+  if(confirmed) return;
+  document.querySelectorAll(".option").forEach(b=>b.style.background="#1e293b");
+  btn.style.background="#6366f1";
+  selected=opt;
+}
+
+// HINT
+function toggleHint(){
+  let h=document.getElementById("hintBox");
+  h.innerText=SCENARIOS[index].hint;
+  h.classList.toggle("hidden");
+}
+
+// CONFIRM
+function confirmAnswer(){
+  if(!selected||confirmed) return;
+
+  confirmed=true;
+  let correct=SCENARIOS[index].answer;
+  let box=document.getElementById("resultBox");
+
+  document.querySelectorAll(".option").forEach(b=>{
+    if(b.innerText===correct) b.classList.add("correct");
+    if(b.innerText===selected && selected!==correct) b.classList.add("wrong");
+  });
+
+  if(selected===correct){
+    playSound("correct");
+    streak++;
+    let bonus = 1000 + streak*200;
+    money += bonus;
+    score++;
+    box.innerText=`✅ Correct! +₹${bonus}`;
+    document.getElementById("game").classList.add("bounce");
+  } else {
+    playSound("wrong");
+    streak=0;
+    money -= 500;
+    box.innerText=`❌ Wrong! -₹500`;
+    document.getElementById("game").classList.add("shake");
+  }
+
+  setTimeout(()=>{
+    document.getElementById("game").classList.remove("bounce","shake");
+  },400);
+
+  box.classList.remove("hidden");
+  document.getElementById("nextBtn").classList.remove("hidden");
+}
+
+// NEXT
+function nextQuestion(){
+  index++;
+  if(index>=SCENARIOS.length) showResult();
+  else loadQuestion();
+}
+
+// RESULT
+function showResult(){
+  document.getElementById("game").classList.add("hidden");
+  document.getElementById("result").classList.remove("hidden");
+
+  document.getElementById("finalMsg").innerText =
+    score>=4 ? "🏆 Pro Trader!" : "📚 Practice More";
+
+  document.getElementById("finalScore").innerText =
+    `Score ${score} | ₹${money}`;
+
+  saveScore();
+  loadLeaderboard();
+}
+
+// LEADERBOARD
+function saveScore(){
+  let data = JSON.parse(localStorage.getItem("scores")||"[]");
+  data.push({score,money});
+  data.sort((a,b)=>b.money-a.money);
+  data = data.slice(0,5);
+  localStorage.setItem("scores",JSON.stringify(data));
+}
+
+function loadLeaderboard(){
+  let data = JSON.parse(localStorage.getItem("scores")||"[]");
+  let list = document.getElementById("leaderboard");
+  list.innerHTML="";
+  data.forEach(d=>{
+    let li=document.createElement("li");
+    li.innerText=`₹${d.money} | Score ${d.score}`;
+    list.appendChild(li);
+  });
+}
+
+// RESTART
+function restart(){
+  index=0; score=0; money=10000; streak=0;
+  document.getElementById("result").classList.add("hidden");
+  document.getElementById("intro").classList.remove("hidden");
+}
+
+</script>
+
+</body>
+</html>
